@@ -1,5 +1,5 @@
 import { Component, input } from '@angular/core';
-import { StepperItem } from '../../../../core/models/wizard.model';
+import { StepperGroup } from '../../../../core/models/wizard.model';
 
 @Component({
   selector: 'app-stepper',
@@ -8,5 +8,5 @@ import { StepperItem } from '../../../../core/models/wizard.model';
   styleUrl: './stepper.component.css',
 })
 export class StepperComponent {
-  readonly steps = input.required<StepperItem[]>();
+  readonly groups = input.required<StepperGroup[]>();
 }

@@ -7,16 +7,20 @@
   gap: 4px;
 }
 
-.step {
+.group + .group {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--color-border);
+}
+
+.group__header {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 10px 12px;
-  border-radius: var(--radius-md);
-  color: var(--color-text-muted);
+  padding: 4px 4px;
 }
 
-.step__marker {
+.group__marker {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -25,33 +29,87 @@
   min-width: 24px;
   border-radius: 50%;
   border: 1px solid var(--color-border);
+  background: var(--color-bg);
+  color: var(--color-text-muted);
   font-size: 0.75rem;
   font-weight: 700;
-  background: var(--color-surface);
 }
 
-.step__title {
-  font-size: 0.9375rem;
-  font-weight: 500;
-}
-
-.step--current {
-  background: rgba(20, 21, 26, 0.06);
-  color: var(--color-text);
-}
-
-.step--current .step__marker {
+.group__marker--current {
   background: var(--color-primary);
   color: var(--color-primary-contrast);
   border-color: var(--color-primary);
 }
 
-.step--done {
+.group__marker--done {
+  background: var(--color-success);
+  color: #fff;
+  border-color: var(--color-success);
+}
+
+.group__title {
+  flex: 1;
+  font-size: 0.9375rem;
+  font-weight: 700;
   color: var(--color-text);
 }
 
-.step--done .step__marker {
+.group__chevron {
+  color: var(--color-text-muted);
+}
+
+.substeps {
+  position: relative;
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 2px 0 2px 32px;
+}
+
+.substeps::before {
+  content: '';
+  position: absolute;
+  left: 15px;
+  top: 14px;
+  bottom: 14px;
+  width: 1px;
+  background: var(--color-border);
+}
+
+.substep {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 10px;
+  margin-left: -8px;
+  border-radius: var(--radius-md);
+  color: var(--color-text-muted);
+  font-size: 0.9375rem;
+}
+
+.substep--current {
+  background: rgba(20, 21, 26, 0.06);
+  color: var(--color-text);
+  font-weight: 600;
+}
+
+.substep__dot {
+  position: relative;
+  z-index: 1;
+  width: 8px;
+  height: 8px;
+  min-width: 8px;
+  border-radius: 50%;
+  background: var(--color-surface);
+  border: 2px solid var(--color-border);
+}
+
+.substep__dot--current {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+}
+
+.substep__dot--done {
   background: var(--color-success);
-  color: #fff;
   border-color: var(--color-success);
 }

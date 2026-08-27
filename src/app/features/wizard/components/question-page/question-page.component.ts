@@ -2,6 +2,7 @@ import { Component, computed, effect, inject, input, output, signal } from '@ang
 import { FormBuilder, FormControl, FormGroup, ReactiveFormsModule } from '@angular/forms';
 import { ApiQuestion } from '../../../../core/models/api.model';
 import { AnswersMap, WizardPage } from '../../../../core/models/wizard.model';
+import { pageIconFor } from '../../../../core/questions/page-icon';
 import { validatorsFor } from '../../../../core/questions/question-validators';
 import { QuestionFieldComponent } from '../question-field/question-field.component';
 
@@ -29,6 +30,8 @@ export class QuestionPageComponent {
 
   protected readonly form = signal<FormGroup>(this.fb.group({}));
   protected readonly submitAttempted = signal(false);
+
+  protected readonly icon = computed(() => pageIconFor(this.page().id));
 
   protected readonly fields = computed<RenderableField[]>(() => {
     const group = this.form();

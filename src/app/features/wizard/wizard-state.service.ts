@@ -3,7 +3,13 @@ import { Injectable, computed, inject, signal } from '@angular/core';
 import { ApplicationApiService } from '../../core/services/application-api.service';
 import { QuoteApiService } from '../../core/services/quote-api.service';
 import { ApiErrorResponse, Quote } from '../../core/models/api.model';
-import { AnswersMap, StepperItem, WizardPage, WizardStatus } from '../../core/models/wizard.model';
+import {
+  AnswersMap,
+  StepperGroup,
+  StepperSubStep,
+  WizardPage,
+  WizardStatus,
+} from '../../core/models/wizard.model';
 
 const DEFAULT_ERROR_MESSAGE = 'Something went wrong. Please try again.';
 
@@ -77,23 +83,20 @@ export class WizardStateService {
     );
   });
 
-  readonly steps = computed<StepperItem[]>(() => {
+  readonly steps = computed<StepperGroup[]>(() => {
     const currentIndex = this._currentPageIndex();
     const isQuoted = this._status() === 'quoted';
 
-    const pageSteps: StepperItem[] = this._pages().map((page, index) => ({
+    const children: StepperSubStep[] = this._pages().map((page, index) => ({
       id: page.id,
       title: page.title,
       state: isQuoted || index < currentIndex ? 'done' : index === currentIndex ? 'current' : 'upcoming',
     }));
 
-    pageSteps.push({
-      id: 'quote',
-      title: 'Quote',
-      state: isQuoted ? 'done' : 'upcoming',
-    });
-
-    return pageSteps;
+    return [
+      { id: 'application', title: 'Application', state: isQuoted ? 'done' : 'current', children },
+      { id: 'quote', title: 'Quote', state: isQuoted ? 'done' : 'upcoming', children: [] },
+    ];
   });
 
   loadApplication(): void {

@@ -3,8 +3,27 @@
   flex-direction: column;
 }
 
+.page__header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0 0 24px;
+}
+
+.page__icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  min-width: 36px;
+  border-radius: var(--radius-md);
+  background: var(--color-bg);
+  color: var(--color-text);
+}
+
 .page__title {
-  margin: 0 0 20px;
+  margin: 0;
   font-size: 1.25rem;
   font-weight: 700;
 }
@@ -19,6 +38,9 @@
 }
 
 .btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   padding: 10px 20px;
   border-radius: var(--radius-md);
   font-size: 0.9375rem;
