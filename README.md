@@ -1,8 +1,10 @@
 # Insurance Quote Journey
 
-A simplified life-insurance application journey (**Your Details / About You → Lifestyle → Quote**)
-built for the Angular/React Frontend Coding Assessment. Implemented in **Angular 22** with
-TypeScript, standalone components, signals, and the new `@if`/`@for`/`@switch` control flow.
+**Angular 22** · **Vite 8** (Angular's dev server) · **Node 24.16.0**
+
+A simplified life-insurance application journey for the Angular/React Frontend Coding Assessment —
+collects applicant details across a few steps, submits them to a Quote API, and shows the returned
+quote, looping through any follow-up questions the API asks first.
 
 ## Why npm, regardless of Angular vs React
 
@@ -119,21 +121,63 @@ what "occupation" means or which options it has:
   than router state, since the page count is only known after a round-trip to `/quote` — a static
   route tree can't express steps that don't exist yet.
 
+## Folder and file structure
+
 ```
-core/
-  models/            API and wizard domain types
-  questions/         validatorsFor(question) — derives validators from required/type
-                     pageIconFor(pageId) — decorative header icon, generic fallback
-  services/          ApplicationApiService, QuoteApiService (talk to /api/*)
-features/wizard/
-  wizard-state.service.ts     orchestrates paging, answers, and the quote loop
-  wizard-page/                container: wires the service to the stepper + current step
-  components/
-    question-page/            builds a reactive FormGroup for one API page
-    question-field/            renders one control based on the question's own metadata
-    stepper/                    sidebar step list (nested Application group + Quote)
-    quote-result/               final quote display
-proxy.conf.json      dev-server proxy: /api/* -> the live Azure-hosted API (CORS workaround)
+insurance-quote-journey/
+├── angular.json                        Angular CLI workspace config; wires the dev-server proxy
+├── proxy.conf.json                     ng serve proxy: /api/* -> the live Azure-hosted API (CORS workaround)
+├── package.json                        npm scripts (start/test/build) + pinned Node engines range
+├── .nvmrc                              pinned Node version (24.16.0)
+│
+└── src/
+    ├── index.html                      HTML shell Angular bootstraps into
+    ├── main.ts                         app entry point — bootstraps the root App component
+    ├── styles.css                      global CSS variables (colors/radii/shadows) + reset
+    │
+    └── app/
+        ├── app.ts / .html / .css       root shell component — just a <router-outlet>
+        ├── app.spec.ts                 smoke test: root component creates
+        ├── app.config.ts               app-wide providers: router + HttpClient
+        ├── app.routes.ts               single route -> WizardPageComponent (+ wildcard redirect)
+        │
+        ├── core/
+        │   ├── models/
+        │   │   ├── api.model.ts             TS types for the live API's request/response shapes
+        │   │   └── wizard.model.ts          frontend-only types: WizardPage, AnswersMap, stepper types
+        │   ├── questions/
+        │   │   ├── question-validators.ts   validatorsFor(question) — Angular validators from required/type
+        │   │   └── page-icon.ts             pageIconFor(pageId) — decorative header icon, generic fallback
+        │   └── services/
+        │       ├── application-api.service.ts   GET /api/application
+        │       └── quote-api.service.ts         POST /api/quote (wraps the body as { answers })
+        │
+        └── features/wizard/
+            ├── wizard-state.service.ts        state machine: pages, current step, answers, quote loop
+            ├── wizard-state.service.spec.ts   tests: paging, the additional-question loop, back, errors
+            │
+            ├── wizard-page/
+            │   └── wizard-page.component.*    container: renders the sidebar stepper + current step/quote
+            │
+            └── components/
+                ├── question-page/
+                │   ├── question-page.component.ts       builds a reactive FormGroup for one API page
+                │   ├── question-page.component.html     form markup: header icon, fields, Back/Next
+                │   ├── question-page.component.css      form layout + button styling
+                │   └── question-page.component.spec.ts  tests: validation gating, number coercion, rebuild
+                ├── question-field/
+                │   ├── question-field.component.ts      renders one control based on question.type
+                │   ├── question-field.component.html    switch over email/text/number/select/radio
+                │   ├── question-field.component.css     input/select/radio styling
+                │   └── question-field.component.spec.ts tests: option rendering, error visibility
+                ├── stepper/
+                │   ├── stepper.component.ts     sidebar step-list input (groups + sub-steps)
+                │   ├── stepper.component.html   nested "Application" group + "Quote" step markup
+                │   └── stepper.component.css    connecting-line/dot/marker styling
+                └── quote-result/
+                    ├── quote-result.component.ts    final quote display
+                    ├── quote-result.component.html  product / cover amount / premium layout
+                    └── quote-result.component.css   quote card styling
 ```
 
 ## Assumptions
@@ -215,13 +259,3 @@ A third bug — a missing `[formGroup]` binding on the page `<form>`, which mean
 click did a real native form submit (full page reload) instead of calling the Angular handler —
 was also found this way, but isn't independently unit-testable (it's a DOM/native-submission
 behaviour); it was caught and fixed via the manual browser verification described above.
-
-## AI assistance
-
-This solution was built with substantial assistance from Claude Code (Anthropic), including
-scaffolding, the data-driven wizard architecture, component implementation, and browser-driven
-verification of the live-API flows described above (including probing the live API directly with
-curl to confirm its exact request/response contract before wiring the frontend to it). Approximate
-time spent: ~2.5 hours of focused session time, slightly over the brief's suggested 2-hour scope,
-due to integrating against the live API (contract discovery, CORS workaround) in addition to the
-original build.
