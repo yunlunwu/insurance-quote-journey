@@ -3,6 +3,7 @@ import { Injectable, computed, inject, signal } from '@angular/core';
 import { ApplicationApiService } from '../../core/services/application-api.service';
 import { QuoteApiService } from '../../core/services/quote-api.service';
 import { ApiErrorResponse, Quote } from '../../core/models/api.model';
+import { applyYourDetailsSplit } from '../../core/questions/page-splitter';
 import {
   AnswersMap,
   StepperGroup,
@@ -83,20 +84,46 @@ export class WizardStateService {
     );
   });
 
+  /**
+   * "Your Details" is pulled out as its own top-level group (matching the
+   * assessment's wireframe) whenever it's the first page — which is exactly
+   * when applyYourDetailsSplit() produced one. Everything else stays under
+   * "Application", so this still degrades gracefully if that split doesn't
+   * happen (no page id'd "your-details": every page just lands under
+   * "Application", as before).
+   */
   readonly steps = computed<StepperGroup[]>(() => {
+    const pages = this._pages();
     const currentIndex = this._currentPageIndex();
     const isQuoted = this._status() === 'quoted';
+    const stateFor = (index: number): StepperSubStep['state'] =>
+      isQuoted || index < currentIndex ? 'done' : index === currentIndex ? 'current' : 'upcoming';
 
-    const children: StepperSubStep[] = this._pages().map((page, index) => ({
-      id: page.id,
-      title: page.title,
-      state: isQuoted || index < currentIndex ? 'done' : index === currentIndex ? 'current' : 'upcoming',
-    }));
+    const groups: StepperGroup[] = [];
+    let applicationStartIndex = 0;
 
-    return [
-      { id: 'application', title: 'Application', state: isQuoted ? 'done' : 'current', children },
-      { id: 'quote', title: 'Quote', state: isQuoted ? 'done' : 'upcoming', children: [] },
-    ];
+    if (pages[0]?.id === 'your-details') {
+      groups.push({ id: pages[0].id, title: pages[0].title, state: stateFor(0), children: [] });
+      applicationStartIndex = 1;
+    }
+
+    const applicationChildren: StepperSubStep[] = pages
+      .slice(applicationStartIndex)
+      .map((page, offset) => ({
+        id: page.id,
+        title: page.title,
+        state: stateFor(offset + applicationStartIndex),
+      }));
+
+    groups.push({
+      id: 'application',
+      title: 'Application',
+      state: isQuoted ? 'done' : currentIndex >= applicationStartIndex ? 'current' : 'upcoming',
+      children: applicationChildren,
+    });
+    groups.push({ id: 'quote', title: 'Quote', state: isQuoted ? 'done' : 'upcoming', children: [] });
+
+    return groups;
   });
 
   loadApplication(): void {
@@ -106,7 +133,7 @@ export class WizardStateService {
     this.applicationApi.getApplication().subscribe({
       next: (response) => {
         this._applicationTitle.set(response.title);
-        this._pages.set(response.pages);
+        this._pages.set(applyYourDetailsSplit(response.pages));
         this._currentPageIndex.set(0);
         this._status.set('in-progress');
       },

@@ -48,17 +48,22 @@ the cross-origin request happen server-side, where CORS doesn't apply. `Applicat
 ## Page structure (user-facing flow)
 
 The step list itself is **not hardcoded** — it's rendered from whatever `GET /application`
-returns, and grows live if `POST /quote` asks a follow-up question. With the live API's current
-data, a typical run looks like:
+returns, and grows live if `POST /quote` asks a follow-up question. The one exception is
+`applyYourDetailsSplit()` (see Architecture below), which splits the API's "About You" page into
+"Your Details" + "About You" client-side to match the wireframe. With the live API's current data,
+a typical run looks like:
 
 ```
-1. About You            (from GET /application)
-   - Email Address        [email,  required]
-   - Phone Number         [text,   required]
+1. Your Details         (client-side split of GET /application's "About You" page)
+   - Email Address        [email, required]
+   - Phone Number         [text,  required]
+        │  Next → submits page, moves to next step (no API call yet)
+        ▼
+2. About You             (the rest of that same API page)
    - Occupation           [select, required — Accountant / Teacher / Builder / Pilot / Other]
         │  Next → submits page, moves to next step (no API call yet — not the last page)
         ▼
-2. Lifestyle             (from GET /application)
+3. Lifestyle             (from GET /application)
    - Have you smoked in the last 12 months?  [radio, required — Yes / No]
         │  Next → POST /quote with ALL answers so far
         │
@@ -66,26 +71,27 @@ data, a typical run looks like:
         │                                                              │
         └─ "Yes" → API responds additionalQuestionsRequired:           │
                                                                         │
-3. Smoking Details        (appended dynamically by POST /quote)        │
+4. Smoking Details        (appended dynamically by POST /quote)        │
    - Cigarettes per week  [number, required]                          │
         │  Next → POST /quote again with the full answer set           │
         ▼                                                              ▼
-4. Quote  ◄─────────────────────────────────────────────────────────────
+5. Quote  ◄─────────────────────────────────────────────────────────────
    - Product / Cover amount / Premium
 ```
 
 Back navigation is available on every step except the first, and preserves everything already
 typed (answers are kept in `WizardStateService`, not lost when a step is left).
 
-The sidebar stepper mirrors the assessment's wireframe: a single **"Application"** group (numbered
-step 1) contains all data-collection pages as nested sub-steps with a connecting line — "About
-You" and "Lifestyle" today, plus "Smoking Details" if the API appends it — followed by **"Quote"**
-as its own top-level step. This is a genuine grouping, not a static copy of the mockup: the
-sub-step list is `WizardStateService.steps()[0].children`, built from the same live `pages()`
-array that drives the form, so an API-appended page shows up as a new sub-step automatically. Each
-page header also gets a small icon (`core/questions/page-icon.ts`), matched by page `id` with a
-generic document icon as the fallback for any page id the mapping doesn't recognise — decorative
-only, it has no effect on validation or submission.
+The sidebar stepper mirrors the assessment's wireframe exactly: **"Your Details"** stands alone as
+step 1, then a single **"Application"** group (step 2) contains every page after it as nested
+sub-steps with a connecting line — "About You" and "Lifestyle" today, plus "Smoking Details" if the
+API appends it — followed by **"Quote"** as its own top-level step 3. `WizardStateService.steps()`
+pulls "Your Details" out into its own group only when it's literally the first page (i.e. only when
+`applyYourDetailsSplit()` actually produced one); every other page still just falls under
+"Application" generically, so this degrades safely if that split doesn't happen. Each page header
+also gets a small icon (`core/questions/page-icon.ts`), matched by page `id` with a generic
+document icon as the fallback for any page id the mapping doesn't recognise — decorative only, it
+has no effect on validation or submission.
 
 ## Architecture
 
@@ -120,6 +126,14 @@ what "occupation" means or which options it has:
 - A single route hosts the whole journey; step-to-step navigation is signal-driven state rather
   than router state, since the page count is only known after a round-trip to `/quote` — a static
   route tree can't express steps that don't exist yet.
+- `applyYourDetailsSplit()` (`core/questions/page-splitter.ts`) is the one deliberate, narrow
+  exception to "render whatever the API sends": the wireframe shows "Your Details" (Email, Phone)
+  as its own step, separate from "About You" (Occupation), but the live API bundles all three into
+  one "About You" page. `WizardStateService.loadApplication()` runs this split on the raw API
+  response before anything else sees it, so every other piece — the submit loop, the stepper
+  grouping, `QuestionPageComponent`, `QuestionFieldComponent` — still just walks a flat page list
+  with no idea the split happened. It only ever acts on a page id'd `"about-you"` and only pulls
+  out questions id'd `"email"`/`"phone"`; anything else passes through untouched.
 
 ## Content Security Policy
 
@@ -181,7 +195,9 @@ insurance-quote-journey/
         │   │   ├── question-validators.ts        validatorsFor(question) — Angular validators from required/type
         │   │   ├── question-validators.spec.ts   tests: required/email/number rules, no phantom formats
         │   │   ├── page-icon.ts                  pageIconFor(pageId) — decorative header icon, generic fallback
-        │   │   └── page-icon.spec.ts             tests: known ids + unrecognised-id fallback
+        │   │   ├── page-icon.spec.ts             tests: known ids + unrecognised-id fallback
+        │   │   ├── page-splitter.ts               applyYourDetailsSplit() — splits "About You" for the wireframe
+        │   │   └── page-splitter.spec.ts          tests: split, pass-through, and both edge cases
         │   └── services/
         │       ├── application-api.service.ts        GET /api/application
         │       ├── application-api.service.spec.ts   test: correct method + URL
@@ -223,13 +239,21 @@ insurance-quote-journey/
 
 - **Currency/frequency**: quote amounts are formatted as AUD; the premium is labelled "Monthly"
   since the API doesn't state a frequency for the returned `premium`.
-- The brief's PDF prose groups "Your Details" (email/phone) separately from "About You"
-  (occupation), but both the PDF's sample JSON and the live API bundle email, phone, and
-  occupation into one "About You" page. The implementation follows the API as the source of
-  truth, since the frontend renders whatever page/question structure it returns.
+- Both the PDF's sample JSON and the live API bundle Email, Phone, and Occupation into a single
+  "About You" page, even though the wireframe shows "Your Details" (Email, Phone) as its own step.
+  Rather than picking one, the frontend splits that one API page into two client-side steps (see
+  `applyYourDetailsSplit()` in Architecture) to match the wireframe without diverging from what the
+  API actually sends over the wire — answers for both steps still get merged into the same
+  accumulated answers map and submitted exactly as the API describes.
 - Verified against the live API that occupation and cigarette count do **not** change the
   premium (flat $64.85 non-smoker / $104.75 smoker) — the frontend doesn't assume or encode any
   pricing logic itself, it only displays whatever `POST /quote` returns.
+- The wireframe's "About You" panel visually shows Email/Phone/Occupation *and* the smoking
+  question together on one screen, but its own sidebar still lists "Lifestyle" as a separate,
+  not-yet-reached sub-step below it — the panel doesn't match its own sidebar. Treated as a mockup
+  inconsistency rather than intent: the PDF's written requirements explicitly separate "Application
+  / About You: Occupation" from "Application / Lifestyle: smoking question", and the live API
+  returns them as two distinct pages, so the app keeps them as separate steps.
 
 ## Known limitations
 
@@ -253,13 +277,13 @@ Approximately 2.5 hours.
 
 ## Tests
 
-38 tests across 11 files. Every non-trivial unit has its own spec — the two API services (request
-shape, including the `{ answers }` wrapping), the two pure question-metadata helpers
-(`validatorsFor`, `pageIconFor`), all four wizard components, `WizardStateService` (the
-paging/answers/quote-loop state machine), and a `WizardPageComponent` integration spec that drives
-the whole tree — fill a field, submit, check the next step rendered — the same way the manual
-browser testing described above did, so the wiring between components (not just each one in
-isolation) is covered too.
+42 tests across 12 files. Every non-trivial unit has its own spec — the two API services (request
+shape, including the `{ answers }` wrapping), the three pure question-metadata helpers
+(`validatorsFor`, `pageIconFor`, `applyYourDetailsSplit`), all four wizard components,
+`WizardStateService` (the paging/answers/quote-loop state machine), and a `WizardPageComponent`
+integration spec that drives the whole tree — fill a field, submit, check the next step rendered —
+the same way the manual browser testing described above did, so the wiring between components (not
+just each one in isolation) is covered too.
 
 ```
 npm test
@@ -268,9 +292,14 @@ npm test
 ```
  ✓ src/app/core/services/application-api.service.spec.ts > ApplicationApiService
      > GETs /api/application
+ ✓ src/app/app.spec.ts > App > should create the app
  ✓ src/app/core/services/quote-api.service.spec.ts > QuoteApiService
      > POSTs to /api/quote with the answers wrapped in an "answers" property
- ✓ src/app/app.spec.ts > App > should create the app
+ ✓ src/app/core/questions/page-splitter.spec.ts > applyYourDetailsSplit
+     > splits an "about-you" page into "Your Details" (email/phone) and "About You" (the rest)
+     > does not touch pages other than "about-you"
+     > drops the "About You" remainder page if nothing but email/phone was in it
+     > leaves an "about-you" page untouched if it has neither email nor phone
  ✓ src/app/core/questions/page-icon.spec.ts > pageIconFor
      > maps known page ids to their icon
      > falls back to a generic document icon for an unrecognised page id
@@ -282,8 +311,8 @@ npm test
      > does not add a format validator for "text" (e.g. phone) beyond required
      > does not add a format validator for "select"/"radio" beyond required
  ✓ src/app/features/wizard/wizard-state.service.spec.ts > WizardStateService
-     > loads pages and the application title from the application API
-     > advances to the next page without calling the quote API until the last page
+     > loads pages and the application title, with "Your Details" split out as its own first page
+     > advances page by page without calling the quote API until the last page
      > appends new pages when the API asks additional questions, looping until quoted
      > goBack moves to the previous page and preserves already-entered answers
      > cannot go back from the first page
@@ -292,7 +321,7 @@ npm test
      > surfaces the API-provided error message when submitting the quote fails, without losing entered answers
      > retry() re-fetches the application if it never loaded, otherwise just clears the error
      > loops through multiple consecutive additionalQuestionsRequired rounds before quoting
-     > steps() groups all data pages under "Application" and keeps "Quote" as a separate top-level step
+     > steps() shows "Your Details" as its own top-level step, ahead of the "Application" group
  ✓ src/app/features/wizard/components/quote-result/quote-result.component.spec.ts
      > QuoteResultComponent > renders the product name and formats cover amount / premium as AUD currency
  ✓ src/app/features/wizard/components/stepper/stepper.component.spec.ts > StepperComponent
@@ -315,9 +344,9 @@ npm test
      > renders the additional-question loop before showing a quote
      > shows an error state with a working retry button when loading the application fails
 
- Test Files  11 passed (11)
-      Tests  38 passed (38)
-   Duration  3.76s
+ Test Files  12 passed (12)
+      Tests  42 passed (42)
+   Duration  3.83s
 ```
 
 Two of the `WizardStateService`/`QuestionFieldComponent` tests are deliberate regression guards
