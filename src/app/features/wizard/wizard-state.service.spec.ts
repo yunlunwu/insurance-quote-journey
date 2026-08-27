@@ -184,4 +184,126 @@ describe('WizardStateService', () => {
     expect(wizard.status()).toBe('error');
     expect(wizard.errorMessage()).toBe('Server is down.');
   });
+
+  it('surfaces the API-provided error message when submitting the quote fails, without losing entered answers', () => {
+    TestBed.configureTestingModule({
+      providers: [
+        WizardStateService,
+        { provide: ApplicationApiService, useValue: { getApplication: () => of(APPLICATION_RESPONSE) } },
+        {
+          provide: QuoteApiService,
+          useValue: {
+            submitQuote: () =>
+              throwError(
+                () =>
+                  new HttpErrorResponse({
+                    status: 400,
+                    error: {
+                      status: 'error',
+                      error: { code: 'INVALID_REQUEST', message: 'Smoking answer must be either "Yes" or "No".' },
+                    },
+                  }),
+              ),
+          },
+        },
+      ],
+    });
+    const wizard = TestBed.inject(WizardStateService);
+    wizard.loadApplication();
+
+    wizard.submitCurrentPage({ email: 'a@b.com', phone: '123', occupation: 'Teacher' });
+    wizard.submitCurrentPage({ smokedLast12Months: 'maybe' });
+
+    expect(wizard.status()).toBe('error');
+    expect(wizard.errorMessage()).toBe('Smoking answer must be either "Yes" or "No".');
+  });
+
+  it('retry() re-fetches the application if it never loaded, otherwise just clears the error', () => {
+    let calls = 0;
+    TestBed.configureTestingModule({
+      providers: [
+        WizardStateService,
+        {
+          provide: ApplicationApiService,
+          useValue: {
+            getApplication: () => {
+              calls++;
+              return calls === 1
+                ? throwError(() => new HttpErrorResponse({ status: 500 }))
+                : of(APPLICATION_RESPONSE);
+            },
+          },
+        },
+        { provide: QuoteApiService, useValue: { submitQuote: () => of({ status: 'quoted' }) } },
+      ],
+    });
+    const wizard = TestBed.inject(WizardStateService);
+
+    wizard.loadApplication();
+    expect(wizard.status()).toBe('error');
+
+    wizard.retry();
+    expect(calls).toBe(2);
+    expect(wizard.status()).toBe('in-progress');
+  });
+
+  it('loops through multiple consecutive additionalQuestionsRequired rounds before quoting', () => {
+    const wizard = setup([
+      {
+        status: 'additionalQuestionsRequired',
+        pages: [
+          {
+            id: 'smoking-details',
+            title: 'Smoking Details',
+            questions: [
+              { id: 'cigarettesPerWeek', label: 'Cigarettes per week', type: 'number', required: true },
+            ],
+          },
+        ],
+      },
+      {
+        status: 'additionalQuestionsRequired',
+        pages: [
+          {
+            id: 'medical-history',
+            title: 'Medical History',
+            questions: [{ id: 'hasCondition', label: 'Any conditions?', type: 'radio', required: true, options: ['Yes', 'No'] }],
+          },
+        ],
+      },
+      { status: 'quoted', quote: { product: 'Life Protect', coverAmount: 500000, premium: 150 } },
+    ]);
+    wizard.loadApplication();
+
+    wizard.submitCurrentPage({ email: 'a@b.com', phone: '123', occupation: 'Teacher' });
+    wizard.submitCurrentPage({ smokedLast12Months: 'Yes' });
+    expect(wizard.currentPage()?.title).toBe('Smoking Details');
+
+    wizard.submitCurrentPage({ cigarettesPerWeek: 20 });
+    expect(wizard.status()).toBe('in-progress');
+    expect(wizard.currentPage()?.title).toBe('Medical History');
+
+    wizard.submitCurrentPage({ hasCondition: 'No' });
+    expect(wizard.status()).toBe('quoted');
+    expect(wizard.quote()?.premium).toBe(150);
+  });
+
+  it('steps() groups all data pages under "Application" and keeps "Quote" as a separate top-level step', () => {
+    const wizard = setup([]);
+    wizard.loadApplication();
+    wizard.submitCurrentPage({ email: 'a@b.com', phone: '123', occupation: 'Teacher' });
+
+    const [application, quote] = wizard.steps();
+
+    expect(application.id).toBe('application');
+    expect(application.state).toBe('current');
+    expect(application.children.map((c) => [c.id, c.state])).toEqual([
+      ['about-you', 'done'],
+      ['lifestyle', 'current'],
+    ]);
+
+    expect(quote.id).toBe('quote');
+    expect(quote.state).toBe('upcoming');
+    expect(quote.children).toEqual([]);
+  });
 });

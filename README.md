@@ -146,18 +146,23 @@ insurance-quote-journey/
         │   │   ├── api.model.ts             TS types for the live API's request/response shapes
         │   │   └── wizard.model.ts          frontend-only types: WizardPage, AnswersMap, stepper types
         │   ├── questions/
-        │   │   ├── question-validators.ts   validatorsFor(question) — Angular validators from required/type
-        │   │   └── page-icon.ts             pageIconFor(pageId) — decorative header icon, generic fallback
+        │   │   ├── question-validators.ts        validatorsFor(question) — Angular validators from required/type
+        │   │   ├── question-validators.spec.ts   tests: required/email/number rules, no phantom formats
+        │   │   ├── page-icon.ts                  pageIconFor(pageId) — decorative header icon, generic fallback
+        │   │   └── page-icon.spec.ts             tests: known ids + unrecognised-id fallback
         │   └── services/
-        │       ├── application-api.service.ts   GET /api/application
-        │       └── quote-api.service.ts         POST /api/quote (wraps the body as { answers })
+        │       ├── application-api.service.ts        GET /api/application
+        │       ├── application-api.service.spec.ts   test: correct method + URL
+        │       ├── quote-api.service.ts               POST /api/quote (wraps the body as { answers })
+        │       └── quote-api.service.spec.ts          test: request body is wrapped correctly
         │
         └── features/wizard/
             ├── wizard-state.service.ts        state machine: pages, current step, answers, quote loop
-            ├── wizard-state.service.spec.ts   tests: paging, the additional-question loop, back, errors
+            ├── wizard-state.service.spec.ts   tests: paging, multi-round loop, back, retry, both error paths
             │
             ├── wizard-page/
-            │   └── wizard-page.component.*    container: renders the sidebar stepper + current step/quote
+            │   ├── wizard-page.component.*        container: renders the sidebar stepper + current step/quote
+            │   └── wizard-page.component.spec.ts  integration tests: full journey through the real DOM
             │
             └── components/
                 ├── question-page/
@@ -173,11 +178,13 @@ insurance-quote-journey/
                 ├── stepper/
                 │   ├── stepper.component.ts     sidebar step-list input (groups + sub-steps)
                 │   ├── stepper.component.html   nested "Application" group + "Quote" step markup
-                │   └── stepper.component.css    connecting-line/dot/marker styling
+                │   ├── stepper.component.css    connecting-line/dot/marker styling
+                │   └── stepper.component.spec.ts tests: group/sub-step rendering, marker + highlight states
                 └── quote-result/
-                    ├── quote-result.component.ts    final quote display
-                    ├── quote-result.component.html  product / cover amount / premium layout
-                    └── quote-result.component.css   quote card styling
+                    ├── quote-result.component.ts       final quote display
+                    ├── quote-result.component.html     product / cover amount / premium layout
+                    ├── quote-result.component.css      quote card styling
+                    └── quote-result.component.spec.ts  test: renders product + AUD-formatted amounts
 ```
 
 ## Assumptions
@@ -204,20 +211,44 @@ insurance-quote-journey/
   verification during development, not committed) against the **live** API — validation, back
   navigation, the additional-question loop, and both smoker/non-smoker paths all confirmed
   working, with quote values matching the live API's responses exactly ($64.85 / $104.75).
+- Phone number has no format validation beyond "required" — the API declares its type as plain
+  `text` with no pattern, and `validatorsFor()` deliberately only derives rules from what the API
+  states (see Architecture), so it doesn't invent a pattern the API never specified.
+
+## Time spent
+
+Approximately 2.5 hours.
 
 ## Tests
 
-16 tests across 4 files — `WizardStateService` (the paging/answers/quote-loop state machine,
-including two regression tests for reactivity bugs found during manual browser testing — see
-below), `QuestionPageComponent` (form building, validation gating, number-type coercion), and
-`QuestionFieldComponent` (rendering per question type, error visibility).
+38 tests across 11 files. Every non-trivial unit has its own spec — the two API services (request
+shape, including the `{ answers }` wrapping), the two pure question-metadata helpers
+(`validatorsFor`, `pageIconFor`), all four wizard components, `WizardStateService` (the
+paging/answers/quote-loop state machine), and a `WizardPageComponent` integration spec that drives
+the whole tree — fill a field, submit, check the next step rendered — the same way the manual
+browser testing described above did, so the wiring between components (not just each one in
+isolation) is covered too.
 
 ```
 npm test
 ```
 
 ```
+ ✓ src/app/core/services/application-api.service.spec.ts > ApplicationApiService
+     > GETs /api/application
+ ✓ src/app/core/services/quote-api.service.spec.ts > QuoteApiService
+     > POSTs to /api/quote with the answers wrapped in an "answers" property
  ✓ src/app/app.spec.ts > App > should create the app
+ ✓ src/app/core/questions/page-icon.spec.ts > pageIconFor
+     > maps known page ids to their icon
+     > falls back to a generic document icon for an unrecognised page id
+ ✓ src/app/core/questions/question-validators.spec.ts > validatorsFor
+     > adds no validators for an optional plain-text question
+     > adds a required validator when the question is required
+     > adds an email-format validator for type "email"
+     > adds a min(0) validator for type "number"
+     > does not add a format validator for "text" (e.g. phone) beyond required
+     > does not add a format validator for "select"/"radio" beyond required
  ✓ src/app/features/wizard/wizard-state.service.spec.ts > WizardStateService
      > loads pages and the application title from the application API
      > advances to the next page without calling the quote API until the last page
@@ -226,6 +257,17 @@ npm test
      > cannot go back from the first page
      > keeps currentPageAnswers referentially stable across repeated reads when nothing changed
      > surfaces the API-provided error message when the application fails to load
+     > surfaces the API-provided error message when submitting the quote fails, without losing entered answers
+     > retry() re-fetches the application if it never loaded, otherwise just clears the error
+     > loops through multiple consecutive additionalQuestionsRequired rounds before quoting
+     > steps() groups all data pages under "Application" and keeps "Quote" as a separate top-level step
+ ✓ src/app/features/wizard/components/quote-result/quote-result.component.spec.ts
+     > QuoteResultComponent > renders the product name and formats cover amount / premium as AUD currency
+ ✓ src/app/features/wizard/components/stepper/stepper.component.spec.ts > StepperComponent
+     > renders each top-level group title and its sub-steps
+     > shows a checkmark for a done group and a number for one that is not done
+     > highlights the current sub-step and does not highlight upcoming/done ones
+     > renders no sub-step list for a group with no children
  ✓ src/app/features/wizard/components/question-field/question-field.component.spec.ts
      > QuestionFieldComponent > renders every API-provided option for a select question
      > QuestionFieldComponent > renders one radio input per API-provided option
@@ -236,10 +278,14 @@ npm test
      > QuestionPageComponent > emits submitPage with the entered values once the form is valid
      > QuestionPageComponent > converts number-type answers to an actual number, not a string
      > QuestionPageComponent > rebuilds the form when navigating to a different page
+ ✓ src/app/features/wizard/wizard-page/wizard-page.component.spec.ts > WizardPageComponent (integration)
+     > walks the full non-smoker journey through to a quote
+     > renders the additional-question loop before showing a quote
+     > shows an error state with a working retry button when loading the application fails
 
- Test Files  4 passed (4)
-      Tests  16 passed (16)
-   Duration  2.35s
+ Test Files  11 passed (11)
+      Tests  38 passed (38)
+   Duration  3.76s
 ```
 
 Two of the `WizardStateService`/`QuestionFieldComponent` tests are deliberate regression guards
