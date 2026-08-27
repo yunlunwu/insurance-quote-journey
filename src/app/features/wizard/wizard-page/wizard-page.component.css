@@ -33,6 +33,9 @@
 }
 
 .state-message {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   color: var(--color-text-muted);
   margin: 0 0 16px;
 }

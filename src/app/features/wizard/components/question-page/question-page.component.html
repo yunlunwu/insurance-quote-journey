@@ -49,8 +49,11 @@
       </button>
     }
     <button type="submit" class="btn btn--primary" [disabled]="submitting()">
-      {{ submitting() ? 'Submitting…' : 'Next' }}
-      @if (!submitting()) {
+      @if (submitting()) {
+        <span class="spinner" aria-hidden="true"></span>
+        Submitting…
+      } @else {
+        Next
         <svg viewBox="0 0 16 16" width="12" height="12" fill="none" aria-hidden="true">
           <path d="M6 3l5 5-5 5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
         </svg>
