@@ -6,6 +6,17 @@ A simplified life-insurance application journey for the Angular/React Frontend C
 collects applicant details across a few steps, submits them to a Quote API, and shows the returned
 quote, looping through any follow-up questions the API asks first.
 
+## Approach
+
+Angular 22 (standalone components, signals) driving a form wizard that renders itself entirely
+from the live API's response — it never hardcodes which fields exist, their labels, types, or
+validation rules. Pages and questions come from `GET /application`; `POST /quote` drives a
+generic "submit → maybe more questions → submit again" loop until a quote comes back, looping
+as many times as the API asks. The one deliberate exception is splitting the API's combined
+"About You" page into "Your Details" + "About You" client-side, to match the assessment's
+wireframe (see **Architecture**). See **Trade-offs** below for what was deliberately given up to
+get there within scope, and **AI Usage** for how this was built.
+
 ## Why npm, regardless of Angular vs React
 
 `npm start` is the brief's run contract, not a React-specific one — both `ng new` (Angular) and
@@ -235,6 +246,28 @@ insurance-quote-journey/
                     └── quote-result.component.spec.ts  test: renders product + AUD-formatted amounts
 ```
 
+## Trade-offs
+
+Decisions made deliberately in favor of one thing at the cost of another, within the assessment's
+scope:
+
+- **Signal-driven step state, not the Angular Router.** Simpler given the step count isn't known
+  until a `/quote` round-trip appends more pages, but gives up deep-linking and browser
+  back/forward support for individual steps (in-app Back/Next still works fully).
+- **A static CSP nonce, not a per-request one.** Keeps `style-src` free of `'unsafe-inline'` (see
+  **Content Security Policy**), but since there's no backend to mint a fresh nonce per request,
+  it's visible in the page source — real protection against naive/accidental injection, not
+  against a determined attacker who can already inject markup.
+- **A narrow client-side page split (`applyYourDetailsSplit`), not a literal pass-through of the
+  API's page structure.** Matches the wireframe's separate "Your Details" step, at the cost of the
+  one deliberate exception to "the frontend never hardcodes what a page/question means" (full
+  reasoning in **Assumptions**).
+- **No persistence layer.** A page refresh restarts the journey; adding `sessionStorage`/URL state
+  was judged lower priority than the live-API integration and test coverage within scope.
+- **Manual, real-browser verification instead of a committed e2e suite.** Playwright-driven manual
+  testing against the live API caught three genuine bugs (see **Tests**) directly; Vitest
+  unit/component/integration specs are committed instead of e2e, which the brief doesn't require.
+
 ## Assumptions
 
 - **Currency/frequency**: quote amounts are formatted as AUD; the premium is labelled "Monthly"
@@ -274,6 +307,32 @@ insurance-quote-journey/
 ## Time spent
 
 Approximately 2.5 hours.
+
+## AI Usage
+
+Significant AI assistance was used throughout, via Claude Code (Anthropic):
+
+- **Scaffolding and architecture**: the Angular 22 project setup, the data-driven wizard design
+  (rendering forms straight off the API's self-describing schema rather than a local question
+  registry), and the `applyYourDetailsSplit()` page-splitting approach.
+- **Live API integration**: probing the deployed API directly with `curl` to discover its actual
+  request/response contract — richer than the PDF's sample payloads (e.g. the `{ answers: {...} }`
+  request wrapper, and that it's stateless) — before wiring the frontend to it, and diagnosing the
+  missing-CORS-headers issue that led to the `ng serve` proxy workaround.
+- **Content Security Policy**: setting up a CSP with no `'unsafe-inline'`/`'unsafe-eval'` anywhere,
+  including diagnosing Angular's critical-CSS inlining and its separate per-component runtime
+  `<style>`-tag injection as the two things that needed addressing to get there (see **Content
+  Security Policy**).
+- **Test suite**: writing all of the project's Vitest specs, across unit, component, and
+  integration levels (see **Tests**).
+- **Debugging via real-browser verification**: three genuine bugs were found this way, not by
+  inspection — a missing `[formGroup]` binding that caused a real native form submit (full page
+  reload) instead of calling the Angular handler, and two cases of wrapping mutable/non-signal
+  state in `computed()`, which silently broke validation-error visibility and wiped in-progress
+  form data on unrelated re-renders. All three are covered by regression tests (see **Tests**).
+
+All AI-assisted code was reviewed, tested, and verified end-to-end against the live API — not just
+the mocked contract from the PDF — before being committed.
 
 ## Tests
 
