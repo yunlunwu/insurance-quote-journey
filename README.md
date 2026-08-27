@@ -248,6 +248,12 @@ insurance-quote-journey/
 - Verified against the live API that occupation and cigarette count do **not** change the
   premium (flat $64.85 non-smoker / $104.75 smoker) — the frontend doesn't assume or encode any
   pricing logic itself, it only displays whatever `POST /quote` returns.
+- The wireframe's "About You" panel visually shows Email/Phone/Occupation *and* the smoking
+  question together on one screen, but its own sidebar still lists "Lifestyle" as a separate,
+  not-yet-reached sub-step below it — the panel doesn't match its own sidebar. Treated as a mockup
+  inconsistency rather than intent: the PDF's written requirements explicitly separate "Application
+  / About You: Occupation" from "Application / Lifestyle: smoking question", and the live API
+  returns them as two distinct pages, so the app keeps them as separate steps.
 
 ## Known limitations
 
