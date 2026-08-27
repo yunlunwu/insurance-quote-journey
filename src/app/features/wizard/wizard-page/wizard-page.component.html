@@ -8,7 +8,10 @@
     <div class="card">
       @switch (wizard.status()) {
         @case ('loading') {
-          <p class="state-message">Loading your application…</p>
+          <p class="state-message">
+            <span class="spinner" aria-hidden="true"></span>
+            Loading your application…
+          </p>
         }
 
         @case ('error') {
