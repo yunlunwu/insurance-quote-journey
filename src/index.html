@@ -6,6 +6,8 @@
   <base href="/">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="icon" type="image/x-icon" href="favicon.ico">
+  <!-- style-src's nonce must match CSP_NONCE_VALUE in src/app/app.config.ts -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'nonce-ng-csp-nonce-insurance-quote-journey'; img-src 'self' data:; connect-src 'self'; base-uri 'self'; form-action 'self'; object-src 'none'">
 </head>
 <body>
   <app-root></app-root>

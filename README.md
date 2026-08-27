@@ -121,24 +121,56 @@ what "occupation" means or which options it has:
   than router state, since the page count is only known after a round-trip to `/quote` — a static
   route tree can't express steps that don't exist yet.
 
+## Content Security Policy
+
+`index.html` sets a CSP via `<meta http-equiv="Content-Security-Policy">`:
+
+```
+default-src 'self'; script-src 'self'; style-src 'self' 'nonce-…'; img-src 'self' data:;
+connect-src 'self'; base-uri 'self'; form-action 'self'; object-src 'none'
+```
+
+- `script-src 'self'` with no `'unsafe-inline'`/`'unsafe-eval'` — only the app's own bundled JS
+  can run.
+- `style-src` has no `'unsafe-inline'` either, which took two real changes to achieve (verified
+  with zero CSP console violations across the full journey, in both `ng serve` and the built
+  production output, served statically):
+  1. `angular.json`'s production config sets `optimization.styles.inlineCritical: false`. Angular's
+     build otherwise inlines critical CSS as a literal `<style>` block in `index.html` (plus an
+     inline `onload` handler to swap in the rest) — both would need `'unsafe-inline'`.
+  2. Angular *also* injects each component's scoped CSS as a `<style>` tag at runtime, independent
+     of that build setting. `app.config.ts` provides Angular's `CSP_NONCE` token with a fixed
+     value, which Angular then stamps onto every such tag; the same value appears in the meta
+     tag's `style-src`. There's no backend here to mint a fresh nonce per request, so this is a
+     **static, build-time nonce** — weaker than a real one (it's visible in the page source, so it
+     doesn't stop a determined attacker who can already inject markup), but it still blocks
+     naive/accidental inline-style injection while keeping the policy meaningfully strict for
+     scripts, which matters more.
+- `img-src` allows `data:` for the select dropdown's inline SVG chevron background-image.
+- `connect-src 'self'` matches the app only ever calling same-origin `/api/*` (see the proxy note
+  above) — it never talks to the Azure domain directly from the browser.
+- `frame-ancestors`/`report-uri`/`sandbox` aren't set: the CSP spec doesn't allow them in a
+  `<meta>`-delivered policy at all (only in a real `Content-Security-Policy` HTTP header), so a
+  production deploy behind a real server/CDN should add those there instead.
+
 ## Folder and file structure
 
 ```
 insurance-quote-journey/
-├── angular.json                        Angular CLI workspace config; wires the dev-server proxy
+├── angular.json                        Angular CLI workspace config; dev-server proxy + CSP-friendly build options
 ├── proxy.conf.json                     ng serve proxy: /api/* -> the live Azure-hosted API (CORS workaround)
 ├── package.json                        npm scripts (start/test/build) + pinned Node engines range
 ├── .nvmrc                              pinned Node version (24.16.0)
 │
 └── src/
-    ├── index.html                      HTML shell Angular bootstraps into
+    ├── index.html                      HTML shell Angular bootstraps into + CSP meta tag
     ├── main.ts                         app entry point — bootstraps the root App component
     ├── styles.css                      global CSS variables (colors/radii/shadows) + reset
     │
     └── app/
         ├── app.ts / .html / .css       root shell component — just a <router-outlet>
         ├── app.spec.ts                 smoke test: root component creates
-        ├── app.config.ts               app-wide providers: router + HttpClient
+        ├── app.config.ts               app-wide providers: router, HttpClient, CSP nonce
         ├── app.routes.ts               single route -> WizardPageComponent (+ wildcard redirect)
         │
         ├── core/
