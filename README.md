@@ -75,6 +75,16 @@ data, a typical run looks like:
 Back navigation is available on every step except the first, and preserves everything already
 typed (answers are kept in `WizardStateService`, not lost when a step is left).
 
+The sidebar stepper mirrors the assessment's wireframe: a single **"Application"** group (numbered
+step 1) contains all data-collection pages as nested sub-steps with a connecting line — "About
+You" and "Lifestyle" today, plus "Smoking Details" if the API appends it — followed by **"Quote"**
+as its own top-level step. This is a genuine grouping, not a static copy of the mockup: the
+sub-step list is `WizardStateService.steps()[0].children`, built from the same live `pages()`
+array that drives the form, so an API-appended page shows up as a new sub-step automatically. Each
+page header also gets a small icon (`core/questions/page-icon.ts`), matched by page `id` with a
+generic document icon as the fallback for any page id the mapping doesn't recognise — decorative
+only, it has no effect on validation or submission.
+
 ## Architecture
 
 **The wizard is data-driven, not hardcoded**, and each question is fully self-describing. A page
@@ -113,6 +123,7 @@ what "occupation" means or which options it has:
 core/
   models/            API and wizard domain types
   questions/         validatorsFor(question) — derives validators from required/type
+                     pageIconFor(pageId) — decorative header icon, generic fallback
   services/          ApplicationApiService, QuoteApiService (talk to /api/*)
 features/wizard/
   wizard-state.service.ts     orchestrates paging, answers, and the quote loop
@@ -120,7 +131,7 @@ features/wizard/
   components/
     question-page/            builds a reactive FormGroup for one API page
     question-field/            renders one control based on the question's own metadata
-    stepper/                    sidebar step list
+    stepper/                    sidebar step list (nested Application group + Quote)
     quote-result/               final quote display
 proxy.conf.json      dev-server proxy: /api/* -> the live Azure-hosted API (CORS workaround)
 ```
