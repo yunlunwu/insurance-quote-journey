@@ -1,0 +1,40 @@
+<div class="layout">
+  <aside class="sidebar">
+    <h1 class="sidebar__title">Life Insurance Application</h1>
+    <app-stepper [steps]="wizard.steps()" />
+  </aside>
+
+  <main class="content">
+    <div class="card">
+      @switch (wizard.status()) {
+        @case ('loading') {
+          <p class="state-message">Loading your application…</p>
+        }
+
+        @case ('error') {
+          <p class="state-message state-message--error">{{ wizard.errorMessage() }}</p>
+          <button type="button" class="btn btn--primary" (click)="onRetry()">Try again</button>
+        }
+
+        @case ('quoted') {
+          @if (wizard.quote(); as quote) {
+            <app-quote-result [quote]="quote" />
+          }
+        }
+
+        @default {
+          @if (wizard.currentPage(); as page) {
+            <app-question-page
+              [page]="page"
+              [initialAnswers]="wizard.currentPageAnswers()"
+              [submitting]="wizard.status() === 'submitting'"
+              [canGoBack]="wizard.canGoBack()"
+              (submitPage)="onSubmitPage($event)"
+              (back)="onBack()"
+            />
+          }
+        }
+      }
+    </div>
+  </main>
+</div>

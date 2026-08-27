@@ -1,0 +1,14 @@
+<ol class="stepper">
+  @for (step of steps(); track step.id) {
+    <li class="step" [class.step--done]="step.state === 'done'" [class.step--current]="step.state === 'current'">
+      <span class="step__marker">
+        @if (step.state === 'done') {
+          ✓
+        } @else {
+          {{ $index + 1 }}
+        }
+      </span>
+      <span class="step__title">{{ step.title }}</span>
+    </li>
+  }
+</ol>
