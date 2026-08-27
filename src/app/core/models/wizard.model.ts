@@ -1,12 +1,10 @@
 import { ApiPage } from './api.model';
 
-/** A page in the wizard, tagged with a stable id so it survives being
- * appended dynamically (additional questions) without index churn. */
-export interface WizardPage extends ApiPage {
-  id: string;
-}
+/** Pages already carry a stable `id` from the API, so no client-side id
+ * synthesis is needed even when new pages are appended mid-journey. */
+export type WizardPage = ApiPage;
 
-export type AnswerValue = string | number | boolean | undefined;
+export type AnswerValue = string | number;
 export type AnswersMap = Record<string, AnswerValue>;
 
 export type WizardStatus = 'loading' | 'in-progress' | 'submitting' | 'quoted' | 'error';

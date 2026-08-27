@@ -1,6 +1,6 @@
 import { Component, input } from '@angular/core';
 import { FormControl, ReactiveFormsModule } from '@angular/forms';
-import { QuestionDefinition } from '../../../../core/questions/question-definition.model';
+import { ApiQuestion } from '../../../../core/models/api.model';
 
 @Component({
   selector: 'app-question-field',
@@ -9,7 +9,7 @@ import { QuestionDefinition } from '../../../../core/questions/question-definiti
   styleUrl: './question-field.component.css',
 })
 export class QuestionFieldComponent {
-  readonly definition = input.required<QuestionDefinition>();
+  readonly question = input.required<ApiQuestion>();
   readonly control = input.required<FormControl>();
   /** True once the parent page's submit was rejected for validation. */
   readonly submitted = input(false);
@@ -34,15 +34,12 @@ export class QuestionFieldComponent {
       return '';
     }
     if (errors['required']) {
-      return 'This field is required.';
+      return `${this.question().label} is required.`;
     }
     if (errors['email']) {
       return 'Enter a valid email address.';
     }
-    if (errors['pattern']) {
-      return 'Enter a valid phone number.';
-    }
-    if (errors['min'] || errors['max']) {
+    if (errors['min']) {
       return 'Enter a realistic number.';
     }
     return 'This value is invalid.';

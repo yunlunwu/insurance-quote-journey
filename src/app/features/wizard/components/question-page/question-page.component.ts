@@ -1,11 +1,12 @@
 import { Component, computed, effect, inject, input, output, signal } from '@angular/core';
 import { FormBuilder, FormControl, FormGroup, ReactiveFormsModule } from '@angular/forms';
+import { ApiQuestion } from '../../../../core/models/api.model';
 import { AnswersMap, WizardPage } from '../../../../core/models/wizard.model';
-import { QuestionDefinition, resolveQuestion } from '../../../../core/questions/question-definition.model';
+import { validatorsFor } from '../../../../core/questions/question-validators';
 import { QuestionFieldComponent } from '../question-field/question-field.component';
 
 interface RenderableField {
-  definition: QuestionDefinition;
+  question: ApiQuestion;
   control: FormControl;
 }
 
@@ -31,9 +32,9 @@ export class QuestionPageComponent {
 
   protected readonly fields = computed<RenderableField[]>(() => {
     const group = this.form();
-    return this.page().questions.map((key) => ({
-      definition: resolveQuestion(key),
-      control: group.get(key) as FormControl,
+    return this.page().questions.map((question) => ({
+      question,
+      control: group.get(question.id) as FormControl,
     }));
   });
 
@@ -43,12 +44,11 @@ export class QuestionPageComponent {
       const answers = this.initialAnswers();
 
       const controlsConfig: Record<string, FormControl> = {};
-      for (const key of page.questions) {
-        const definition = resolveQuestion(key);
-        const initialValue = definition.fromAnswer
-          ? definition.fromAnswer(answers[key])
-          : (answers[key] ?? '');
-        controlsConfig[key] = this.fb.control(initialValue, definition.validators);
+      for (const question of page.questions) {
+        controlsConfig[question.id] = this.fb.control(
+          answers[question.id] ?? '',
+          validatorsFor(question),
+        );
       }
 
       this.form.set(this.fb.group(controlsConfig));
@@ -65,10 +65,9 @@ export class QuestionPageComponent {
     }
 
     const answers: AnswersMap = {};
-    for (const key of this.page().questions) {
-      const definition = resolveQuestion(key);
-      const rawValue = group.get(key)!.value;
-      answers[key] = definition.toAnswer ? definition.toAnswer(rawValue) : rawValue;
+    for (const question of this.page().questions) {
+      const rawValue = group.get(question.id)!.value;
+      answers[question.id] = question.type === 'number' ? Number(rawValue) : rawValue;
     }
     this.submitPage.emit(answers);
   }

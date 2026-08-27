@@ -1,12 +1,20 @@
+import { HttpErrorResponse } from '@angular/common/http';
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { ApplicationApiService } from '../../core/services/application-api.service';
 import { QuoteApiService } from '../../core/services/quote-api.service';
-import { Quote } from '../../core/models/api.model';
+import { ApiErrorResponse, Quote } from '../../core/models/api.model';
 import { AnswersMap, StepperItem, WizardPage, WizardStatus } from '../../core/models/wizard.model';
 
-let pageIdSequence = 0;
-function nextPageId(): string {
-  return `page-${pageIdSequence++}`;
+const DEFAULT_ERROR_MESSAGE = 'Something went wrong. Please try again.';
+
+function messageFrom(error: unknown): string {
+  if (error instanceof HttpErrorResponse) {
+    const body = error.error as ApiErrorResponse | undefined;
+    if (body?.error?.message) {
+      return body.error.message;
+    }
+  }
+  return DEFAULT_ERROR_MESSAGE;
 }
 
 /**
@@ -17,7 +25,10 @@ function nextPageId(): string {
  * Pages are stored as a flat, ever-growing list rather than as nested
  * routes because the API can append pages at runtime (additionalQuestions
  * Required) — a static route tree can't express a step count that isn't
- * known until the previous step's answer is submitted.
+ * known until the previous step's answer is submitted. The backend is
+ * stateless: every /quote call resubmits the full accumulated answers map,
+ * not just the current page's, since the server has no memory of earlier
+ * calls.
  */
 @Injectable({ providedIn: 'root' })
 export class WizardStateService {
@@ -30,11 +41,13 @@ export class WizardStateService {
   private readonly _status = signal<WizardStatus>('loading');
   private readonly _quote = signal<Quote | null>(null);
   private readonly _errorMessage = signal<string | null>(null);
+  private readonly _applicationTitle = signal<string>('Life Insurance Application');
 
   readonly pages = this._pages.asReadonly();
   readonly status = this._status.asReadonly();
   readonly quote = this._quote.asReadonly();
   readonly errorMessage = this._errorMessage.asReadonly();
+  readonly applicationTitle = this._applicationTitle.asReadonly();
 
   readonly currentPage = computed<WizardPage | undefined>(
     () => this._pages()[this._currentPageIndex()],
@@ -59,7 +72,9 @@ export class WizardStateService {
       return {};
     }
     const answers = this._answers();
-    return Object.fromEntries(page.questions.map((key) => [key, answers[key]]));
+    return Object.fromEntries(
+      page.questions.map((question) => [question.id, answers[question.id]]),
+    );
   });
 
   readonly steps = computed<StepperItem[]>(() => {
@@ -87,13 +102,14 @@ export class WizardStateService {
 
     this.applicationApi.getApplication().subscribe({
       next: (response) => {
-        this._pages.set(response.pages.map((page) => ({ ...page, id: nextPageId() })));
+        this._applicationTitle.set(response.title);
+        this._pages.set(response.pages);
         this._currentPageIndex.set(0);
         this._status.set('in-progress');
       },
-      error: () => {
+      error: (error) => {
         this._status.set('error');
-        this._errorMessage.set('Could not load the application. Please try again.');
+        this._errorMessage.set(messageFrom(error));
       },
     });
   }
@@ -126,14 +142,13 @@ export class WizardStateService {
           return;
         }
 
-        const newPages = (response.pages ?? []).map((page) => ({ ...page, id: nextPageId() }));
-        this._pages.update((pages) => [...pages, ...newPages]);
+        this._pages.update((pages) => [...pages, ...(response.pages ?? [])]);
         this._currentPageIndex.update((index) => index + 1);
         this._status.set('in-progress');
       },
-      error: () => {
+      error: (error) => {
         this._status.set('error');
-        this._errorMessage.set('Could not submit your application. Please try again.');
+        this._errorMessage.set(messageFrom(error));
       },
     });
   }

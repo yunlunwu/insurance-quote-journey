@@ -1,58 +1,33 @@
 <div class="field" [class.field--invalid]="showError()">
-  <label [for]="definition().key">{{ definition().label }}</label>
+  <label [for]="question().id">{{ question().label }}</label>
 
-  @switch (definition().type) {
+  @switch (question().type) {
     @case ('select') {
-      <select [id]="definition().key" [formControl]="control()">
-        <option value="" disabled>{{ definition().placeholder ?? 'Select an option' }}</option>
-        @for (option of definition().options; track option.value) {
-          <option [value]="option.value">{{ option.label }}</option>
+      <select [id]="question().id" [formControl]="control()">
+        <option value="" disabled>Select an option</option>
+        @for (option of question().options; track option) {
+          <option [value]="option">{{ option }}</option>
         }
       </select>
     }
-    @case ('radio-boolean') {
-      <div class="radio-group" [id]="definition().key">
-        <label class="radio-option">
-          <input type="radio" [formControl]="control()" value="yes" />
-          Yes
-        </label>
-        <label class="radio-option">
-          <input type="radio" [formControl]="control()" value="no" />
-          No
-        </label>
+    @case ('radio') {
+      <div class="radio-group" [id]="question().id">
+        @for (option of question().options; track option) {
+          <label class="radio-option">
+            <input type="radio" [formControl]="control()" [value]="option" [attr.value]="option" />
+            {{ option }}
+          </label>
+        }
       </div>
     }
     @case ('number') {
-      <input
-        [id]="definition().key"
-        type="number"
-        [formControl]="control()"
-        [placeholder]="definition().placeholder ?? ''"
-      />
+      <input [id]="question().id" type="number" [formControl]="control()" />
     }
     @case ('email') {
-      <input
-        [id]="definition().key"
-        type="email"
-        [formControl]="control()"
-        [placeholder]="definition().placeholder ?? ''"
-      />
-    }
-    @case ('tel') {
-      <input
-        [id]="definition().key"
-        type="tel"
-        [formControl]="control()"
-        [placeholder]="definition().placeholder ?? ''"
-      />
+      <input [id]="question().id" type="email" [formControl]="control()" />
     }
     @default {
-      <input
-        [id]="definition().key"
-        type="text"
-        [formControl]="control()"
-        [placeholder]="definition().placeholder ?? ''"
-      />
+      <input [id]="question().id" type="text" [formControl]="control()" />
     }
   }
 

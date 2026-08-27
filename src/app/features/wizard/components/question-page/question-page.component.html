@@ -1,9 +1,9 @@
 <form class="page" [formGroup]="form()" (ngSubmit)="onSubmit()">
   <h2 class="page__title">{{ page().title }}</h2>
 
-  @for (field of fields(); track field.definition.key) {
+  @for (field of fields(); track field.question.id) {
     <app-question-field
-      [definition]="field.definition"
+      [question]="field.question"
       [control]="field.control"
       [submitted]="submitAttempted()"
     />
