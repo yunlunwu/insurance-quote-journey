@@ -1,4 +1,4 @@
-export type PageIconKey = 'person' | 'heart' | 'lungs' | 'document';
+export type PageIconKey = 'person' | 'briefcase' | 'heart' | 'lungs' | 'document';
 
 /**
  * Purely decorative: picks an icon for a page's header based on its id.
@@ -8,8 +8,10 @@ export type PageIconKey = 'person' | 'heart' | 'lungs' | 'document';
  */
 export function pageIconFor(pageId: string): PageIconKey {
   switch (pageId) {
-    case 'about-you':
+    case 'your-details':
       return 'person';
+    case 'about-you':
+      return 'briefcase';
     case 'lifestyle':
       return 'heart';
     case 'smoking-details':

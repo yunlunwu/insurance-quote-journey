@@ -8,6 +8,9 @@ import { ApplicationApiService } from '../../../core/services/application-api.se
 import { QuoteApiService } from '../../../core/services/quote-api.service';
 import { ApplicationResponse, QuoteResponse } from '../../../core/models/api.model';
 
+// "about-you" bundles email/phone/occupation, same as the live API — the
+// component tree under test applies applyYourDetailsSplit() for real, so the
+// actual journey is Your Details -> About You -> Lifestyle -> (...) -> Quote.
 const APPLICATION_RESPONSE: ApplicationResponse = {
   id: '1',
   title: 'Life Insurance Application',
@@ -17,6 +20,7 @@ const APPLICATION_RESPONSE: ApplicationResponse = {
       title: 'About You',
       questions: [
         { id: 'email', label: 'Email Address', type: 'email', required: true },
+        { id: 'phone', label: 'Phone Number', type: 'text', required: true },
         {
           id: 'occupation',
           label: 'Occupation',
@@ -75,23 +79,31 @@ function submit(fixture: ReturnType<typeof createComponent>) {
   fixture.detectChanges();
 }
 
+function pageTitle(fixture: ReturnType<typeof createComponent>): string {
+  return fixture.debugElement.query(By.css('.page__title')).nativeElement.textContent;
+}
+
+/** Fills and submits "Your Details" then "About You", landing on "Lifestyle". */
+function completeYourDetailsAndAboutYou(fixture: ReturnType<typeof createComponent>): void {
+  expect(pageTitle(fixture)).toBe('Your Details');
+  setValue(fixture, '#email', 'a@b.com');
+  setValue(fixture, '#phone', '0400000000');
+  submit(fixture);
+
+  expect(pageTitle(fixture)).toBe('About You');
+  setValue(fixture, '#occupation', 'Teacher');
+  submit(fixture);
+
+  expect(pageTitle(fixture)).toBe('Lifestyle');
+}
+
 describe('WizardPageComponent (integration)', () => {
   it('walks the full non-smoker journey through to a quote', () => {
     const fixture = createComponent([
       { status: 'quoted', quote: { product: 'Life Protect', coverAmount: 500000, premium: 64.85 } },
     ]);
 
-    expect(fixture.debugElement.query(By.css('.page__title')).nativeElement.textContent).toBe(
-      'About You',
-    );
-
-    setValue(fixture, '#email', 'a@b.com');
-    setValue(fixture, '#occupation', 'Teacher');
-    submit(fixture);
-
-    expect(fixture.debugElement.query(By.css('.page__title')).nativeElement.textContent).toBe(
-      'Lifestyle',
-    );
+    completeYourDetailsAndAboutYou(fixture);
 
     fixture.debugElement
       .query(By.css('.radio-group#smokedLast12Months input[value="No"]'))
@@ -121,18 +133,14 @@ describe('WizardPageComponent (integration)', () => {
       { status: 'quoted', quote: { product: 'Life Protect', coverAmount: 500000, premium: 104.75 } },
     ]);
 
-    setValue(fixture, '#email', 'a@b.com');
-    setValue(fixture, '#occupation', 'Teacher');
-    submit(fixture);
+    completeYourDetailsAndAboutYou(fixture);
 
     fixture.debugElement
       .query(By.css('.radio-group#smokedLast12Months input[value="Yes"]'))
       .nativeElement.click();
     submit(fixture);
 
-    expect(fixture.debugElement.query(By.css('.page__title')).nativeElement.textContent).toBe(
-      'Smoking Details',
-    );
+    expect(pageTitle(fixture)).toBe('Smoking Details');
 
     setValue(fixture, '#cigarettesPerWeek', '20');
     submit(fixture);
@@ -173,8 +181,6 @@ describe('WizardPageComponent (integration)', () => {
     fixture.debugElement.query(By.css('.state-message--error + button')).nativeElement.click();
     fixture.detectChanges();
 
-    expect(fixture.debugElement.query(By.css('.page__title')).nativeElement.textContent).toBe(
-      'About You',
-    );
+    expect(pageTitle(fixture)).toBe('Your Details');
   });
 });

@@ -1,12 +1,15 @@
 import { HttpErrorResponse } from '@angular/common/http';
 import { TestBed } from '@angular/core/testing';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { of, throwError } from 'rxjs';
 import { WizardStateService } from './wizard-state.service';
 import { ApplicationApiService } from '../../core/services/application-api.service';
 import { QuoteApiService } from '../../core/services/quote-api.service';
 import { ApplicationResponse, QuoteResponse } from '../../core/models/api.model';
 
+// The live API bundles email/phone/occupation into one "About You" page;
+// applyYourDetailsSplit() (exercised for real here, not stubbed) turns that
+// into "Your Details" -> "About You" -> "Lifestyle" to match the wireframe.
 const APPLICATION_RESPONSE: ApplicationResponse = {
   id: '1',
   title: 'Life Insurance Application',
@@ -62,23 +65,32 @@ function setup(quoteResponses: QuoteResponse[]) {
   return TestBed.inject(WizardStateService);
 }
 
+/** Walks "Your Details" then "About You", landing on "Lifestyle". */
+function completeYourDetailsAndAboutYou(wizard: WizardStateService): void {
+  wizard.submitCurrentPage({ email: 'a@b.com', phone: '123' });
+  wizard.submitCurrentPage({ occupation: 'Teacher' });
+}
+
 describe('WizardStateService', () => {
-  it('loads pages and the application title from the application API', () => {
+  it('loads pages and the application title, with "Your Details" split out as its own first page', () => {
     const wizard = setup([]);
     wizard.loadApplication();
 
     expect(wizard.status()).toBe('in-progress');
     expect(wizard.applicationTitle()).toBe('Life Insurance Application');
-    expect(wizard.pages().map((p) => p.title)).toEqual(['About You', 'Lifestyle']);
-    expect(wizard.currentPage()?.title).toBe('About You');
+    expect(wizard.pages().map((p) => p.title)).toEqual(['Your Details', 'About You', 'Lifestyle']);
+    expect(wizard.currentPage()?.title).toBe('Your Details');
   });
 
-  it('advances to the next page without calling the quote API until the last page', () => {
+  it('advances page by page without calling the quote API until the last page', () => {
     const wizard = setup([{ status: 'quoted', quote: { product: 'x', coverAmount: 1, premium: 1 } }]);
     wizard.loadApplication();
 
-    wizard.submitCurrentPage({ email: 'a@b.com', phone: '123', occupation: 'Teacher' });
+    wizard.submitCurrentPage({ email: 'a@b.com', phone: '123' });
+    expect(wizard.status()).toBe('in-progress');
+    expect(wizard.currentPage()?.title).toBe('About You');
 
+    wizard.submitCurrentPage({ occupation: 'Teacher' });
     expect(wizard.status()).toBe('in-progress');
     expect(wizard.currentPage()?.title).toBe('Lifestyle');
   });
@@ -106,7 +118,7 @@ describe('WizardStateService', () => {
     ]);
     wizard.loadApplication();
 
-    wizard.submitCurrentPage({ email: 'a@b.com', phone: '123', occupation: 'Teacher' });
+    completeYourDetailsAndAboutYou(wizard);
     wizard.submitCurrentPage({ smokedLast12Months: 'Yes' });
 
     expect(wizard.status()).toBe('in-progress');
@@ -122,15 +134,16 @@ describe('WizardStateService', () => {
     const wizard = setup([{ status: 'quoted', quote: { product: 'x', coverAmount: 1, premium: 1 } }]);
     wizard.loadApplication();
 
-    wizard.submitCurrentPage({ email: 'a@b.com', phone: '123', occupation: 'Teacher' });
+    wizard.submitCurrentPage({ email: 'a@b.com', phone: '123' });
+    wizard.submitCurrentPage({ occupation: 'Teacher' });
     wizard.goBack();
 
     expect(wizard.currentPage()?.title).toBe('About You');
-    expect(wizard.currentPageAnswers()).toEqual({
-      email: 'a@b.com',
-      phone: '123',
-      occupation: 'Teacher',
-    });
+    expect(wizard.currentPageAnswers()).toEqual({ occupation: 'Teacher' });
+
+    wizard.goBack();
+    expect(wizard.currentPage()?.title).toBe('Your Details');
+    expect(wizard.currentPageAnswers()).toEqual({ email: 'a@b.com', phone: '123' });
   });
 
   it('cannot go back from the first page', () => {
@@ -139,7 +152,7 @@ describe('WizardStateService', () => {
 
     expect(wizard.canGoBack()).toBe(false);
     wizard.goBack();
-    expect(wizard.currentPage()?.title).toBe('About You');
+    expect(wizard.currentPage()?.title).toBe('Your Details');
   });
 
   it(
@@ -211,7 +224,7 @@ describe('WizardStateService', () => {
     const wizard = TestBed.inject(WizardStateService);
     wizard.loadApplication();
 
-    wizard.submitCurrentPage({ email: 'a@b.com', phone: '123', occupation: 'Teacher' });
+    completeYourDetailsAndAboutYou(wizard);
     wizard.submitCurrentPage({ smokedLast12Months: 'maybe' });
 
     expect(wizard.status()).toBe('error');
@@ -275,7 +288,7 @@ describe('WizardStateService', () => {
     ]);
     wizard.loadApplication();
 
-    wizard.submitCurrentPage({ email: 'a@b.com', phone: '123', occupation: 'Teacher' });
+    completeYourDetailsAndAboutYou(wizard);
     wizard.submitCurrentPage({ smokedLast12Months: 'Yes' });
     expect(wizard.currentPage()?.title).toBe('Smoking Details');
 
@@ -288,22 +301,26 @@ describe('WizardStateService', () => {
     expect(wizard.quote()?.premium).toBe(150);
   });
 
-  it('steps() groups all data pages under "Application" and keeps "Quote" as a separate top-level step', () => {
+  it('steps() shows "Your Details" as its own top-level step, ahead of the "Application" group', () => {
     const wizard = setup([]);
     wizard.loadApplication();
-    wizard.submitCurrentPage({ email: 'a@b.com', phone: '123', occupation: 'Teacher' });
 
-    const [application, quote] = wizard.steps();
-
-    expect(application.id).toBe('application');
-    expect(application.state).toBe('current');
-    expect(application.children.map((c) => [c.id, c.state])).toEqual([
-      ['about-you', 'done'],
-      ['lifestyle', 'current'],
-    ]);
-
-    expect(quote.id).toBe('quote');
+    const [yourDetails, application, quote] = wizard.steps();
+    expect(yourDetails.id).toBe('your-details');
+    expect(yourDetails.state).toBe('current');
+    expect(yourDetails.children).toEqual([]);
+    expect(application.state).toBe('upcoming');
     expect(quote.state).toBe('upcoming');
-    expect(quote.children).toEqual([]);
+
+    wizard.submitCurrentPage({ email: 'a@b.com', phone: '123' });
+
+    const stepsAfter = wizard.steps();
+    expect(stepsAfter[0].state).toBe('done');
+    expect(stepsAfter[1].id).toBe('application');
+    expect(stepsAfter[1].state).toBe('current');
+    expect(stepsAfter[1].children.map((c) => [c.id, c.state])).toEqual([
+      ['about-you', 'current'],
+      ['lifestyle', 'upcoming'],
+    ]);
   });
 });
